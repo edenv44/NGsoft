@@ -1,0 +1,51 @@
+from fastapi import FastAPI, HTTPException
+import uvicorn
+from sqlalchemy import select
+from sql_connector import LoginRequest, SessionLocal, users_table, MainTask, UserTaskGroup
+
+app = FastAPI()  # create app
+
+@app.get("/")
+async def say_hi():
+    return "HI"
+@app.post("/login")
+async def login(data: LoginRequest):
+    session = SessionLocal()
+    try:
+        stmt = select(users_table).where(users_table.c.username == data.username)
+        result = session.execute(stmt).fetchone()
+        if not result:
+            raise HTTPException(status_code=400, detail="User not found")
+        if not result.is_active:
+            raise HTTPException(status_code=400, detail="User is inactive")
+        if result.password != data.password:
+            raise HTTPException(status_code=400, detail="Incorrect password")
+        return {"message": "Login successful", "user_id": result.user_id, "username": result.username}
+    finally:
+        session.close()
+
+@app.get("/tasks/{user_id}")
+def get_tasks(user_id: int):
+    session = SessionLocal()
+    try:
+        # משימות שהוקצו על ידי המשתמש
+        assigned_tasks = session.query(MainTask).filter(MainTask.assigned_by == user_id).all()
+
+        # משימות שמופיעות בטבלת user_task_group_id
+        group_tasks = session.query(MainTask).join(UserTaskGroup, MainTask.mTask_id == UserTaskGroup.task_group_id)\
+            .filter(UserTaskGroup.user_id == user_id).all()
+
+        # איחוד הרשימות והסרת כפילויות
+        all_tasks = {t.mTask_id: t for t in assigned_tasks + group_tasks}.values()
+
+        if not all_tasks:
+            raise HTTPException(status_code=404, detail="No tasks found for this user")
+
+        return [{"task_id": t.mTask_id, "task_name": t.mTask_name, "is_active": t.is_active} for t in all_tasks]
+
+    finally:
+        session.close()
+
+if __name__ == "__main__":
+    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
+
