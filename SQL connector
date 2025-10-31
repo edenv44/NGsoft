@@ -1,0 +1,59 @@
+from pydantic import BaseModel
+from sqlalchemy import create_engine, Table, Column, Integer, String, MetaData, Boolean, TIMESTAMP, select, \
+    SmallInteger, ForeignKey
+from sqlalchemy.orm import sessionmaker, declarative_base
+
+# ======================
+# הגדרת FastAPI
+# ======================
+
+# ======================
+# חיבור למסד נתונים MySQL
+# ======================
+DATABASE_URL = "mysql+pymysql://root:passEDsql1!@localhost/task_db"  # עדכן בהתאם
+engine = create_engine(DATABASE_URL)
+metadata = MetaData()
+SessionLocal = sessionmaker(bind=engine)
+Base = declarative_base()
+# ======================
+# הגדרת הטבלה users
+# ======================
+users_table = Table(
+    "users", metadata,
+    Column("user_id", Integer, primary_key=True, autoincrement=True),
+    Column("username", String(20), nullable=False),
+    Column("password", String(30), nullable=False),
+    Column("is_active", Boolean, default=True),
+    Column("creation_date", TIMESTAMP),
+    Column("modification_date", TIMESTAMP)
+)
+
+# ======================
+# מודל לקבלת נתונים
+# ======================
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+# ======================
+# endpoint login
+# ======================
+
+class MainTask(Base):
+    __tablename__ = "main_task"
+
+    mTask_id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    mTask_name = Column(String(255), nullable=False)
+    is_active = Column(SmallInteger, default=1)
+    assigned_by = Column(Integer, ForeignKey("users.user_id"), nullable=True)
+    creation_date = Column(TIMESTAMP, server_default="CURRENT_TIMESTAMP")
+    modification_date = Column(TIMESTAMP, server_default="CURRENT_TIMESTAMP", onupdate="CURRENT_TIMESTAMP")
+
+
+class UserTaskGroup(Base):
+    __tablename__ = "user_task_group_id"
+
+    user_id = Column(Integer, ForeignKey("users.user_id"), primary_key=True)
+    task_group_id = Column(Integer, ForeignKey("main_task.mTask_id"), primary_key=True)
+
+
