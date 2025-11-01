@@ -1,7 +1,10 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
 import uvicorn
 from sqlalchemy import select
-from sql_connector import LoginRequest, SessionLocal, users_table, MainTask, UserTaskGroup, TaskCreate
+from sqlalchemy.orm import Session
+
+from sql_connector import LoginRequest, SessionLocal, users_table, MainTask, UserTaskGroup, MainTaskUpdate, \
+    MainTaskCreate, Task, TaskUpdate, TaskCreate, User, UserUpdate, UserCreate
 
 app = FastAPI()  # create app
 
@@ -24,7 +27,8 @@ async def login(data: LoginRequest):
     finally:
         session.close()
 
-@app.get("/tasks/{user_id}")
+################################################################## main task
+@app.get("/main_task/{user_id}")
 def get_tasks(user_id: int):
     session = SessionLocal()
     try:
@@ -46,8 +50,8 @@ def get_tasks(user_id: int):
     finally:
         session.close()
 
-@app.post("/tasks")
-def create_task(task: TaskCreate):
+@app.post("/main_task")
+def create_task(task: MainTaskCreate):
     session = SessionLocal()
     try:
         new_task = MainTask(mTask_name=task.mTask_name, assigned_by=task.assigned_by)
@@ -58,8 +62,186 @@ def create_task(task: TaskCreate):
     finally:
         session.close()
 
+@app.put("/main_task/{task_id}")
+def update_task(task_id: int, updated_task: MainTaskUpdate):
+    session = SessionLocal()
+    try:
+        task = session.query(MainTask).filter(MainTask.mTask_id == task_id).first()
+        if not task:
+            raise HTTPException(status_code=404, detail="Task not found")
+
+        if updated_task.mTask_name is not None:
+            task.mTask_name = updated_task.mTask_name
+        if updated_task.is_active is not None:
+            task.is_active = updated_task.is_active
+        if updated_task.assigned_by is not None:
+            task.assigned_by = updated_task.assigned_by
+
+        session.commit()
+        session.refresh(task)
+        return {"message": "Task updated successfully", "task_id": task.mTask_id}
+    finally:
+        session.close()
+
+# ---------------------------------------------------------
+# Delete a task by ID
+# ---------------------------------------------------------
+@app.delete("/main_task/{task_id}")
+def delete_task(task_id: int):
+    session = SessionLocal()
+    try:
+        task = session.query(MainTask).filter(MainTask.mTask_id == task_id).first()
+        if not task:
+            raise HTTPException(status_code=404, detail="Task not found")
+
+        session.delete(task)
+        session.commit()
+        return {"message": "Task deleted successfully"}
+    finally:
+        session.close()
+
+####################################################################### task
+@app.post("/tasks/", response_model=dict)
+def create_task(task: TaskCreate):
+    session = SessionLocal()
+    new_task = Task(**task.dict())
+    session.add(new_task)
+    session.commit()
+    session.refresh(new_task)
+    return {"message": "Task created successfully", "task_id": new_task.task_id}
+
+
+@app.get("/tasks/{task_id}", response_model=dict)
+def get_task(task_id: int):
+    session = SessionLocal()
+    db_task = session.query(Task).filter(Task.task_id == task_id).first()
+    if not db_task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return {
+        "task_id": db_task.task_id,
+        "task_name": db_task.task_name,
+        "status": db_task.status.value,
+        "assigned_by": db_task.assigned_by,
+        "assigned_to": db_task.assigned_to,
+        "task_group_id": db_task.task_group_id,
+        "creation_date": db_task.creation_date,
+        "modification_date": db_task.modification_date,
+    }
+
+
+@app.get("/tasks/", response_model=list[dict])
+def get_all_tasks():
+    session = SessionLocal()
+    tasks = session.query(Task).all()
+    return [
+        {
+            "task_id": t.task_id,
+            "task_name": t.task_name,
+            "status": t.status.value,
+            "assigned_by": t.assigned_by,
+            "assigned_to": t.assigned_to,
+            "task_group_id": t.task_group_id,
+        }
+        for t in tasks
+    ]
+
+
+@app.put("/tasks/{task_id}", response_model=dict)
+def update_task(task_id: int, task_update: TaskUpdate):
+    session = SessionLocal()
+    db_task = session.query(Task).filter(Task.task_id == task_id).first()
+    if not db_task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    for key, value in task_update.dict(exclude_unset=True).items():
+        setattr(db_task, key, value)
+
+    session.commit()
+    session.refresh(db_task)
+    return {"message": f"Task {task_id} updated successfully"}
+
+
+@app.delete("/tasks/{task_id}", response_model=dict)
+def delete_task(task_id: int):
+    session = SessionLocal()
+    db_task = session.query(Task).filter(Task.task_id == task_id).first()
+    if not db_task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    session.delete(db_task)
+    session.commit()
+    return {"message": f"Task {task_id} deleted successfully"}
+
+#################################################################################### user
+@app.post("/users/", response_model=dict)
+def create_user(user: UserCreate):
+    session = SessionLocal()
+    new_user = User(**user.dict())
+    session.add(new_user)
+    session.commit()
+    session.refresh(new_user)
+    return {"message": "User created successfully", "user_id": new_user.user_id}
+
+
+# 🔵 Get All Users
+@app.get("/users/", response_model=list[dict])
+def get_all_users():
+    session = SessionLocal()
+    users = session.query(User).all()
+    return [
+        {
+            "user_id": u.user_id,
+            "username": u.username,
+            "is_active": u.is_active,
+            "creation_date": u.creation_date,
+            "modification_date": u.modification_date,
+        }
+        for u in users
+    ]
+
+
+# 🟣 Get User by ID
+@app.get("/users/{user_id}", response_model=dict)
+def get_user(user_id: int):
+    session = SessionLocal()
+    user = session.query(User).filter(User.user_id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {
+        "user_id": user.user_id,
+        "username": user.username,
+        "is_active": user.is_active,
+        "creation_date": user.creation_date,
+        "modification_date": user.modification_date,
+    }
+
+
+# 🟠 Update User
+@app.put("/users/{user_id}", response_model=dict)
+def update_user(user_id: int, user_update: UserUpdate):
+    session = SessionLocal()
+    user = session.query(User).filter(User.user_id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    for key, value in user_update.dict(exclude_unset=True).items():
+        setattr(user, key, value)
+
+    session.commit()
+    session.refresh(user)
+    return {"message": f"User {user_id} updated successfully"}
+
+
+# 🔴 Delete User
+@app.delete("/users/{user_id}", response_model=dict)
+def delete_user(user_id: int):
+    session = SessionLocal()
+    user = session.query(User).filter(User.user_id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    session.delete(user)
+    session.commit()
+    return {"message": f"User {user_id} deleted successfully"}
+
 if __name__ == "__main__":
     uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
-
-
 
