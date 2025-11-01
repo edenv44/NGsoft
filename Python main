@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException
 import uvicorn
 from sqlalchemy import select
-from sql_connector import LoginRequest, SessionLocal, users_table, MainTask, UserTaskGroup
+from sql_connector import LoginRequest, SessionLocal, users_table, MainTask, UserTaskGroup, TaskCreate
 
 app = FastAPI()  # create app
 
@@ -46,6 +46,20 @@ def get_tasks(user_id: int):
     finally:
         session.close()
 
+@app.post("/tasks")
+def create_task(task: TaskCreate):
+    session = SessionLocal()
+    try:
+        new_task = MainTask(mTask_name=task.mTask_name, assigned_by=task.assigned_by)
+        session.add(new_task)
+        session.commit()
+        session.refresh(new_task)
+        return {"message": "Task created successfully", "task_id": new_task.mTask_id}
+    finally:
+        session.close()
+
 if __name__ == "__main__":
     uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
+
+
 
