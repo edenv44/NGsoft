@@ -39,6 +39,17 @@ class LoginRequest(BaseModel):
 # endpoint login
 # ======================
 
+class User(Base):
+    __tablename__ = "users"
+
+    user_id = Column(Integer, primary_key=True, autoincrement=True)
+    username = Column(String(20), nullable=False)
+    password = Column(String(30), nullable=False)
+    is_active = Column(SmallInteger, default=1)
+    creation_date = Column(TIMESTAMP)
+    modification_date = Column(TIMESTAMP)
+
+
 class MainTask(Base):
     __tablename__ = "main_task"
 
@@ -56,4 +67,12 @@ class UserTaskGroup(Base):
     user_id = Column(Integer, ForeignKey("users.user_id"), primary_key=True)
     task_group_id = Column(Integer, ForeignKey("main_task.mTask_id"), primary_key=True)
 
+class TaskCreate(BaseModel):
+    mTask_name: str
+    assigned_by: int | None = None
+
+class TaskUpdate(BaseModel):
+    mTask_name: str | None = None
+    is_active: int | None = None
+    assigned_by: int | None = None
 
