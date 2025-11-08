@@ -1,26 +1,31 @@
+import datetime
 import enum
+from typing import List
 
+from fastapi import HTTPException
 from pydantic import BaseModel
 from sqlalchemy import create_engine, Table, Column, Integer, String, MetaData, Boolean, TIMESTAMP, select, \
-    SmallInteger, ForeignKey, Enum, func
+    SmallInteger, ForeignKey, Enum, func, DateTime
 from sqlalchemy.orm import sessionmaker, declarative_base
 
-# ======================
-# הגדרת FastAPI
-# ======================
 
-# ======================
-# חיבור למסד נתונים MySQL
-# ======================
 DATABASE_URL = "mysql+pymysql://root:passEDsql1!@localhost/task_db"  # עדכן בהתאם
 engine = create_engine(DATABASE_URL)
 metadata = MetaData()
 SessionLocal = sessionmaker(bind=engine)
 Base = declarative_base()
-# ======================
-# הגדרת הטבלה users
-# ======================
-users_table = Table(
+
+
+################################################################################### login
+
+class LoginRequest(BaseModel): # login parameters request
+    username: str
+    password: str
+
+
+################################################################################### users
+
+users_table = Table( # define users table
     "users", metadata,
     Column("user_id", Integer, primary_key=True, autoincrement=True),
     Column("username", String(20), nullable=False),
@@ -30,16 +35,6 @@ users_table = Table(
     Column("modification_date", TIMESTAMP)
 )
 
-# ======================
-# מודל לקבלת נתונים
-# ======================
-class LoginRequest(BaseModel):
-    username: str
-    password: str
-
-# ======================
-# endpoint login
-# ======================
 
 class User(Base):
     __tablename__ = "users"
@@ -51,10 +46,27 @@ class User(Base):
     creation_date = Column(TIMESTAMP, server_default=func.now())
     modification_date = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now())
 
-#################################################################### main task
+
+class UserCreate(BaseModel): # create user
+    username: str
+    password: str
+    is_active: int | None = 1
+
+
+class UserUpdate(BaseModel): # edit user
+    username: str | None = None
+    password: str | None = None
+    is_active: int | None = None
+
+
+class UserActiveStatus(BaseModel): # change user active status
+    target_user_id: int
+
+
+################################################################################### main task
+
 class MainTask(Base):
     __tablename__ = "main_task"
-
     mTask_id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     mTask_name = Column(String(255), nullable=False)
     is_active = Column(SmallInteger, default=1)
@@ -63,33 +75,41 @@ class MainTask(Base):
     modification_date = Column(TIMESTAMP, server_default="CURRENT_TIMESTAMP", onupdate="CURRENT_TIMESTAMP")
 
 
-class UserTaskGroup(Base):
-    __tablename__ = "user_task_group_id"
-
-    user_id = Column(Integer, ForeignKey("users.user_id"), primary_key=True)
-    task_group_id = Column(Integer, ForeignKey("main_task.mTask_id"), primary_key=True)
-
-class MainTaskCreate(BaseModel):
+class MainTaskCreate(BaseModel): # create main task
     mTask_name: str
     assigned_by: int | None = None
 
-class MainTaskUpdate(BaseModel):
+
+class MainTaskUpdate(BaseModel): # edit main task
     mTask_name: str | None = None
     is_active: int | None = None
     assigned_by: int | None = None
 
-class MainTaskDelete(BaseModel):
+
+class MainTaskDelete(BaseModel): # delete main task
     mTask_id: int
 
 
-##################################################################### task
-class TaskStatus(enum.Enum):
+
+################################################################################### user task group id
+
+class UserTaskGroup(Base):
+    __tablename__ = "user_task_group_id"
+    user_id = Column(Integer, ForeignKey("users.user_id"), primary_key=True)
+    task_group_id = Column(Integer, ForeignKey("main_task.mTask_id"), primary_key=True)
+
+
+class ShareMainTaskRequest(BaseModel): # connect main task to user
+    task_group_id: int
+    user_ids: List[int]
+
+
+################################################################################### task
+
+class TaskStatus(enum.Enum): # possibilities for task status
     PENDING = "PENDING"
     DONE = "DONE"
     REJECTED = "REJECTED"
-
-
-# ---------- Models ----------
 
 
 class Task(Base):
@@ -105,8 +125,7 @@ class Task(Base):
     modification_date = Column(TIMESTAMP)
 
 
-# ---------- Pydantic Schemas ----------
-class TaskCreate(BaseModel):
+class TaskCreate(BaseModel): # create task
     task_name: str
     status: TaskStatus = TaskStatus.PENDING
     assigned_by: int | None = None
@@ -114,22 +133,30 @@ class TaskCreate(BaseModel):
     task_group_id: int | None = None
 
 
-class TaskUpdate(BaseModel):
+class TaskUpdate(BaseModel): # edit task
     task_name: str | None = None
     status: TaskStatus | None = None
     assigned_by: int | None = None
     assigned_to: int | None = None
     task_group_id: int | None = None
 
-########################################################################## user
-# ---------- Pydantic Schemas ----------
-class UserCreate(BaseModel):
-    username: str
-    password: str
-    is_active: int | None = 1
 
+class ShareTaskRequest(BaseModel): # share task between users
+    task_id: int
+    target_user_id: int
+    current_user_id: int
 
-class UserUpdate(BaseModel):
-    username: str | None = None
-    password: str | None = None
-    is_active: int | None = None
+class TaskCreateForOther(BaseModel): # create a task and assign different user
+    task_name: str
+    assigned_by: int       # creating user
+    assigned_to: int       # assigned user
+    task_group_id: int     # main task to which the task will be assigned
+
+class TaskShare(Base):
+    __tablename__ = "task_share"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.user_id", ondelete="CASCADE"))
+    task_id = Column(Integer, ForeignKey("task.task_id", ondelete="CASCADE"))
+    creation_date = Column(DateTime(timezone=True), server_default=func.now())
+
