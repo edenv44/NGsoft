@@ -1,6 +1,6 @@
 import datetime
 
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, Body
 import uvicorn
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -162,7 +162,6 @@ def get_user_main_tasks_with_tasks(user_id: int):
                     "task_id": task.task_id,
                     "task_name": task.task_name,
                     "status": task.status,
-                    "due_date": task.due_date,
                     "assigned_by": task.assigned_by,
                     "assigned_to": task.assigned_to,
                     "creation_date": task.creation_date,
@@ -177,7 +176,7 @@ def get_user_main_tasks_with_tasks(user_id: int):
     }
 
 
-@app.get("/users/{user_id}/main-tasks", response_model=dict) # get main tasks of user by user id
+@app.get("/users/{user_id}/main-tasks", response_model=dict) # get all users main tasks (by user id)
 def get_user_main_tasks(user_id: int):
     session = SessionLocal()
 
@@ -186,10 +185,10 @@ def get_user_main_tasks(user_id: int):
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # main tasks this user has created
+    # main tasks created by user
     created_main_tasks = session.query(MainTask).filter(MainTask.assigned_by == user_id).all()
 
-    # main tasks shared with this user (user_task_group_id)
+    # main tasks shared with the user
     shared_main_task_ids = (
         session.query(UserTaskGroup.task_group_id)
         .filter(UserTaskGroup.user_id == user_id)
@@ -197,7 +196,6 @@ def get_user_main_tasks(user_id: int):
         .all()
     )
     shared_main_task_ids = [row[0] for row in shared_main_task_ids]
-
     shared_main_tasks = []
     if shared_main_task_ids:
         shared_main_tasks = (
@@ -206,7 +204,7 @@ def get_user_main_tasks(user_id: int):
             .all()
         )
 
-    # unify both main task lists without duplicates
+    # unite both main tasks with no duplicates
     all_main_tasks = {mt.mTask_id: mt for mt in created_main_tasks + shared_main_tasks}.values()
 
     # return data neatly
@@ -221,7 +219,6 @@ def get_user_main_tasks(user_id: int):
         }
         for mt in all_main_tasks
     ]
-
     return {
         "user": user.username,
         "main_tasks": result
@@ -370,6 +367,46 @@ def create_task_for_other(task_data: TaskCreateForOther):
     }
 
 
+@app.post("/tasks/share/{task_id}/{target_user_id}")
+def share_task(task_id: int, target_user_id: int, current_user_id: int = Body(..., embed=True)):
+    session = SessionLocal()
+
+    # בדוק אם המשימה קיימת
+    task = session.query(Task).filter(Task.task_id == task_id).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    # בדוק אם המשתמש היעד קיים
+    target_user = session.query(User).filter(User.user_id == target_user_id).first()
+    if not target_user:
+        raise HTTPException(status_code=404, detail="Target user not found")
+
+    # בדוק אם המשימה כבר משותפת עם המשתמש
+    existing_share = session.query(TaskShare).filter_by(
+        user_id=target_user_id,
+        task_id=task_id
+    ).first()
+    if existing_share:
+        raise HTTPException(status_code=400, detail="Task already shared with this user")
+
+    # צור שיתוף חדש
+    new_share = TaskShare(user_id=target_user_id, task_id=task_id)
+    session.add(new_share)
+
+    # ודא שגם המשתמש הנוכחי רשום כמשתף (אם לא)
+    current_share = session.query(TaskShare).filter_by(
+        user_id=current_user_id,
+        task_id=task_id
+    ).first()
+    if not current_share:
+        session.add(TaskShare(user_id=current_user_id, task_id=task_id))
+
+    session.commit()
+    session.close()
+
+    return {"message": f"Task {task_id} successfully shared with user {target_user_id}"}
+
+
 ################################################################################### put end points
 @app.put("/main_task/{task_id}") # edit main task by main task id
 def update_task(task_id: int, updated_task: MainTaskUpdate):
@@ -486,14 +523,12 @@ def remove_user_from_main_task(main_task_id: int, user_id: int):
         Task.task_group_id == main_task_id,
         Task.assigned_to == user_id
     ).all()
-
     for task in tasks_to_update:
         task.assigned_to = None  # remove connection from user
 
     # remove connection from main task
     session.delete(link)
     session.commit()
-
     return {
         "message": f"User {user_id} removed from main task {main_task_id} and unassigned from all its tasks",
         "tasks_updated": len(tasks_to_update)
