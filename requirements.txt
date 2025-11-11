@@ -1,5 +1,7 @@
 gunicorn
 uvicorn
 fastapi
+SQLAlchemy>=2.0
+
 
 
