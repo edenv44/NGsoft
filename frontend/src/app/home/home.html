@@ -1,0 +1,137 @@
+<!-- Debug: Home component loaded -->
+<div class="home-container">
+  <div class="header">
+    <h1>Welcome, {{ username || 'User' }} 👋</h1>
+    <button mat-raised-button color="accent" (click)="openCreateMainTaskDialog()" class="create-button">
+      <mat-icon>add_circle</mat-icon>
+      Create Main Task
+    </button>
+    <button mat-raised-button color="primary" (click)="openCreateTaskDialog()" class="create-button">
+      <mat-icon>add_task</mat-icon>
+      Create Task
+    </button>
+    <button mat-raised-button color="primary" (click)="logout()">Logout</button>
+  </div>
+
+  <div class="tasks-section">
+    <h2>My Main Tasks</h2>
+    
+    <div *ngIf="!userId" class="error-message">
+      User ID not found. Please log in again.
+    </div>
+
+    <!-- Filters Section -->
+    <div class="filters-container" *ngIf="userId">
+      <!-- Search Input -->
+      <mat-form-field appearance="outline" class="search-field">
+        <mat-label>Search Main Tasks</mat-label>
+        <input matInput [(ngModel)]="searchText" placeholder="Type to search tasks...">
+      </mat-form-field>
+    </div>
+
+    <!-- Error Message -->
+    <div *ngIf="errorMessage" class="error-message">
+      {{ errorMessage }}
+    </div>
+
+    <!-- Loading Indicator -->
+    <div *ngIf="loading" class="loading">
+      Loading tasks...
+    </div>
+
+    <!-- Main Tasks List -->
+    <div class="tasks-list" *ngIf="!loading">
+      <div *ngIf="(filteredMainTasks | taskSearch: searchText).length === 0" class="no-tasks">
+        <p>No main tasks found matching your criteria.</p>
+      </div>
+
+      <mat-expansion-panel 
+        *ngFor="let mainTask of filteredMainTasks | taskSearch: searchText" 
+        class="main-task-panel"
+        (opened)="onMainTaskOpened(mainTask)"
+        (closed)="onMainTaskClosed()"
+      >
+        <mat-expansion-panel-header>
+          <mat-panel-title>
+            <div class="panel-header">
+              <h3 class="task-name">{{ mainTask.main_task_name }}</h3>
+              <span class="active-badge" [class.active]="mainTask.is_active === 1" [class.inactive]="mainTask.is_active === 0">
+                <mat-icon class="status-icon-small">{{ mainTask.is_active === 1 ? 'check_circle' : 'cancel' }}</mat-icon>
+                {{ mainTask.is_active === 1 ? 'Active' : 'Inactive' }}
+              </span>
+            </div>
+          </mat-panel-title>
+          <mat-panel-description>
+            <div class="task-info">
+              <span class="task-id">Main Task ID: {{ mainTask.main_task_id }}</span>
+              <span *ngIf="mainTask.creation_date" class="task-group">Created: {{ mainTask.creation_date | date:'short' }}</span>
+            </div>
+          </mat-panel-description>
+        </mat-expansion-panel-header>
+
+        <!-- Tasks Dropdown Content -->
+        <div class="tasks-dropdown-content">
+          <div class="create-task-button-container">
+            <button mat-raised-button color="warn" (click)="deleteMainTask(mainTask); $event.stopPropagation()" class="delete-main-task-button">
+              <mat-icon>delete</mat-icon>
+              Delete Main Task
+            </button>
+          </div>
+
+          <div *ngIf="isLoadingTasks(mainTask.main_task_id)" class="loading-tasks">
+            Loading tasks...
+          </div>
+
+          <div *ngIf="!isLoadingTasks(mainTask.main_task_id)">
+            <div *ngIf="getTasksForMainTask(mainTask.main_task_id).length === 0" class="no-tasks-in-dropdown">
+              <p>No tasks assigned to you in this main task.</p>
+            </div>
+
+            <div class="tasks-list-dropdown" *ngIf="getTasksForMainTask(mainTask.main_task_id).length > 0">
+              <mat-card 
+                *ngFor="let task of getTasksForMainTask(mainTask.main_task_id)" 
+                class="task-card-dropdown"
+                (click)="openTaskDetails(task); $event.stopPropagation()"
+              >
+                <mat-card-content>
+                  <div class="task-header">
+                    <h4 class="task-name">{{ task.task_name }}</h4>
+                    <span class="status-badge" [class]="'status-' + task.status.toLowerCase()">
+                      <mat-icon class="status-icon-small" [class]="'status-icon-' + task.status.toLowerCase()">
+                        {{ getStatusIcon(task.status) }}
+                      </mat-icon>
+                      {{ task.status }}
+                    </span>
+                  </div>
+                  <div class="task-info">
+                    <span class="task-id">Task ID: {{ task.task_id }}</span>
+                  </div>
+                </mat-card-content>
+              </mat-card>
+            </div>
+          </div>
+        </div>
+      </mat-expansion-panel>
+    </div>
+  </div>
+
+  <!-- User Management Section -->
+  <div class="user-management-section">
+    <button mat-raised-button color="accent" (click)="openCreateUserDialog()" class="user-management-button">
+      <mat-icon>person_add</mat-icon>
+      Add User
+    </button>
+    <button mat-raised-button color="accent" (click)="openEditUserDialog()" class="user-management-button">
+      <mat-icon>edit</mat-icon>
+      Edit My Profile
+    </button>
+    <button mat-raised-button color="primary" (click)="openChangeUserStatusDialog()" class="user-management-button">
+      <mat-icon>swap_horiz</mat-icon>
+      Change User Status
+    </button>
+    <button mat-raised-button color="warn" (click)="openDeleteUserDialog()" class="user-management-button">
+      <mat-icon>person_remove</mat-icon>
+      Delete User
+    </button>
+  </div>
+</div>
