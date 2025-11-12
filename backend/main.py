@@ -6,7 +6,7 @@ import uvicorn
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from .sql_connector import LoginRequest, SessionLocal, users_table, MainTask, UserTaskGroup, MainTaskUpdate, \
+from sql_connector import LoginRequest, SessionLocal, users_table, MainTask, UserTaskGroup, MainTaskUpdate, \
     MainTaskCreate, Task, TaskUpdate, TaskCreate, User, UserUpdate, UserCreate, TaskCreateForOther, TaskShare, \
     UserActiveStatus
 
