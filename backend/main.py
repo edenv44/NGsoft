@@ -1,6 +1,6 @@
 import datetime
 import os
-
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi import FastAPI, HTTPException, Depends, Body
 import uvicorn
 from sqlalchemy import select
@@ -12,6 +12,7 @@ from sql_connector import LoginRequest, SessionLocal, users_table, MainTask, Use
 
 
 app = FastAPI()  # create app
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 @app.get("/")
 async def say_hi():
