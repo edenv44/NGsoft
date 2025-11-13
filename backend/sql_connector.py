@@ -9,7 +9,8 @@ from sqlalchemy import create_engine, Table, Column, Integer, String, MetaData, 
 from sqlalchemy.orm import sessionmaker, declarative_base
 
 
-DATABASE_URL = "mysql+pymysql://root:passEDsql1!@localhost/task_db"
+DATABASE_URL = "mysql+pymysql://admin:Aa123456@database-1.ccnmayg4cx2m.us-east-1.rds.amazonaws.com/task_db"
+
 engine = create_engine(DATABASE_URL)
 metadata = MetaData()
 SessionLocal = sessionmaker(bind=engine)
